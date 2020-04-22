@@ -1,0 +1,1 @@
+echo "TODO: add function to clear all but best checkpoints"

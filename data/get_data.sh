@@ -1,0 +1,1 @@
+echo "TODO: create script to pull data automatically"
