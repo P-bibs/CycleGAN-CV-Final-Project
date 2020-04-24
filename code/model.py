@@ -4,6 +4,12 @@ import tensorflow as tf
 import hyperparameters as hp
 from tensorflow.keras.layers import \
         Conv2D, MaxPool2D, Dropout, Flatten, Dense
+from os import listdir
+from numpy import asarray
+from numpy import vstack
+from keras.preprocessing.image import img_to_array
+from keras.preprocessing.image import load_img
+from numpy import savez_compressed
 
 #TODO: At this point, this is mostly code taken from the tensorflow tutorial.
 #      We should go through and understand it and change it to fit our needs.
@@ -15,6 +21,19 @@ from tensorflow.keras.layers import \
 
 # discriminator_g = 
 # discriminator_h = 
+
+# load all images in a directory into memory
+def load_images(path, size=(256,256)):
+	data_list = list()
+	# enumerate filenames in directory, assume all are images
+	for filename in listdir(path):
+		# load and resize the image
+		pixels = load_img(path + filename, target_size=size)
+		# convert to numpy array
+		pixels = img_to_array(pixels)
+		# store
+		data_list.append(pixels)
+	return asarray(data_list)
 
 loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
