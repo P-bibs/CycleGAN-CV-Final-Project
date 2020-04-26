@@ -3,11 +3,9 @@
 import os
 import argparse
 import tensorflow as tf
-from vgg_model import VGGModel
-from your_model import YourModel
+from model import CycleGANModel
 import hyperparameters as hp
-from preprocess import Datasets
-from tensorboard_utils import ImageLabelingLogger, ConfusionMatrixLogger
+from read_in import Datasets
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -21,7 +19,7 @@ def parse_args():
     parser.add_argument(
         '--dataset',
         required=True,
-        choices=['horse-zebra', 'day-night', 'apples-oranges'],
+        choices=['horse-zebra', 'day-night', 'apples-oranges', 'summer-winter'],
         help='''Which dataset to run''')
     parser.add_argument(
         '--data',
@@ -56,11 +54,9 @@ def train(model, datasets, checkpoint_path):
     callback_list = [
         tf.keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path + \
-                    "weights.e{epoch:02d}-" + \
-                    "acc{val_sparse_categorical_accuracy:.4f}.h5",
-            monitor='val_sparse_categorical_accuracy',
+                    "weights.e{epoch:02d}.h5",
             save_best_only=True,
-            save_weights_only=True),
+            save_weights_only=False),
         tf.keras.callbacks.TensorBoard(
             update_freq='batch',
             profile_batch=0),
@@ -92,40 +88,26 @@ def test(model, test_data):
 
 def main():
     """ Main function. """
+    if ARGS.dataset == "horse-zebra":
+        data_dir = "../data/horse2zebra"
+    elif ARGS.dataset == "day-night":
+        # TODO: get day to night data
+        raise Error("Day-night data not yet gathered")
+        data_dir = ""
+    elif ARGS.dataset == "apples-oranges":
+        data_dir = "../data/apple2orange"
+    elif ARGS.dataset == "summer-winter":
+        data_dir = "../data/summer2winter_yosemite"
 
-    datasets = Datasets(ARGS.data, ARGS.task)
+    datasets = Datasets(data_dir)
 
-    if ARGS.task == '1':
-        model = YourModel()
-        model(tf.keras.Input(shape=(hp.img_size, hp.img_size, 3)))
-        checkpoint_path = "./your_model_checkpoints/"
-        model.summary()
-    else:
-        model = VGGModel()
-        checkpoint_path = "./vgg_model_checkpoints/"
-        model(tf.keras.Input(shape=(224, 224, 3)))
-        model.summary()
-
-        # Don't load pretrained vgg if loading checkpoint
-        if ARGS.load_checkpoint is None:
-            model.load_weights(ARGS.load_vgg, by_name=True)
-
-    if ARGS.load_checkpoint is not None:
-        model.load_weights(ARGS.load_checkpoint)
-
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
-
-    # Compile model graph
-    model.compile(
-        optimizer=model.optimizer,
-        loss=model.loss_fn,
-        metrics=["sparse_categorical_accuracy"])
+    cycleGAN_model = CycleGANModel()
 
     if ARGS.evaluate:
-        test(model, datasets.test_data)
+        cycleGAN_model.test(datasets.test_A)
     else:
-        train(model, datasets, checkpoint_path)
+        cycleGAN_model.train(datasets.train_A)
+
 
 # Make arguments global
 ARGS = parse_args()

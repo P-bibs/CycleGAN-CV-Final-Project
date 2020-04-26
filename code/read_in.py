@@ -8,13 +8,15 @@ import hyperparameters as hp
 
 class Datasets():
     def __init__(self, dat_dir):
-        self.Path_A = os.path.join(dat_dir, 'A')
-        self.Path_B = os.path.join(dat_dir, 'B')
+        self.train_A_path = os.path.join(dat_dir, 'trainA')
+        self.train_B_path = os.path.join(dat_dir, 'trainB')
+        self.test_A_path = os.path.join(dat_dir, 'testA')
+        self.test_B_path = os.path.join(dat_dir, 'testB')
 
-        self.train_A = self.push_data(self.Path_A)
-        self.train_B = self.push_data(self.Path_B)
-        self.test_A = self.push_data(self.Path_A, False)
-        self.test_B = self.push_data(self.Path_B, False)
+        self.train_A = self.push_data(self.train_A_path)
+        self.train_B = self.push_data(self.train_B_path)
+        self.test_A = self.push_data(self.test_A_path, False)
+        self.test_B = self.push_data(self.test_B_path, False)
 
     def preprocess_sequence(self, img, augment):
         # Required for some augmentations
@@ -42,17 +44,14 @@ class Datasets():
   
     def push_data(self, path, train = True):
         # returns a generator for the specified data.
-        if train:
-            true_path = os.path.join(path, "Train")
-        else:
-            true_path = os.path.join(path, "Test")
+        true_path = path
 
         data_gen = tf.keras.preprocessing.image.ImageDataGenerator(
             preprocessing_function = lambda im: self.preprocess_sequence(im, train))
 
         data_gen = data_gen.flow_from_directory(
             true_path, 
-            target_size=(hp.img_size, hp.img_size),
+            target_size=(hp.image_size, hp.image_size),
             class_mode = None,
             batch_size=hp.batch_size)
         return data_gen
