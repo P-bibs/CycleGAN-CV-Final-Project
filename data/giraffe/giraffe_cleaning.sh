@@ -1,7 +1,5 @@
 #!/bin/bash
-file="output2.txt"
-while IFS= read -r line
-do
-    # display $line or do somthing with $line
-    find . -name "$line" -delete
-done <"$file"
+sed -e '1,4d' negsamples.html > output.txt
+sed 's/<img src="//' output.txt > output3.txt
+sed 's/" .*$//' output3.txt > output4.txt
+sed -i '$ d' output4.txt
