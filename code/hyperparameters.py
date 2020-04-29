@@ -6,7 +6,6 @@
 image_size = 128
 
 
-
 # Training parameters
 
 num_epochs = 50

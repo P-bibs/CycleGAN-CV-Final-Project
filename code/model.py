@@ -13,6 +13,8 @@ from numpy import vstack
 from tensorflow.keras.preprocessing.image import img_to_array
 from keras.preprocessing.image import load_img
 from numpy import savez_compressed
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
 
 class CycleGANModel:
     def __init__(self):
@@ -43,7 +45,7 @@ class CycleGANModel:
             R256, R256,
             R256, R256,
             R256, R256,
-            # u128
+            # u128: upsampling + convolution
             Conv2DTranspose(128, 3, strides=2, activation='relu'),
             # u64
             Conv2DTranspose(64, 3, strides=2, activation='relu'),
@@ -65,7 +67,7 @@ class CycleGANModel:
             R256, R256,
             R256, R256,
             R256, R256,
-            # u128
+            # u128: upsampling + convolution
             Conv2DTranspose(128, 3, strides=2, activation='relu'),
             # u64
             Conv2DTranspose(64, 3, strides=2, activation='relu'),
@@ -75,25 +77,35 @@ class CycleGANModel:
 
         # TODO: if this doesn't work, experiment with relu slope. Documentation is unclear
         self.discriminator_x = Sequential([
+            # C64
             Conv2D(64 , 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C128
             Conv2D(128, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C256
             Conv2D(256, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C512
             Conv2D(512, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
         ])
 
         self.discriminator_y = Sequential([
+            # C64
             Conv2D(64 , 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C128
             Conv2D(128, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C256
             Conv2D(256, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # C512
             Conv2D(512, 4, strides=2),
             LeakyReLU(alpha=0.2),
+            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
         ])
 
     # load all images in a directory into memory
@@ -108,11 +120,11 @@ class CycleGANModel:
     #         # store
     #         data_list.append(pixels)
     #     return asarray(data_list)
-
+    
     def initialize_loss_functions(self):
         loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
-        def discriminator_loss(real, generated):
+        def discriminator_loss(real, generated): # adversarial loss for discriminator
             real_loss = loss_obj(tf.ones_like(real), real)
 
             generated_loss = loss_obj(tf.zeros_like(generated), generated)
@@ -121,10 +133,10 @@ class CycleGANModel:
 
             return total_disc_loss * 0.5
 
-        def generator_loss(generated):
+        def generator_loss(generated): # adversarial loss for generator
             return loss_obj(tf.ones_like(generated), generated)
 
-        def calc_cycle_loss(real_image, cycled_image):
+        def calc_cycle_loss(real_image, cycled_image): # cycle loss
             loss1 = tf.reduce_mean(tf.abs(real_image - cycled_image))
 
             return hp.cycle_consistency_weight * loss1
@@ -139,6 +151,7 @@ class CycleGANModel:
         self.identity_loss = identity_loss
 
     def initialize_optimizers(self):
+        # Optimizer that implements the Adam algorithm.
         self.generator_g_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
         self.generator_f_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
@@ -168,14 +181,14 @@ class CycleGANModel:
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
         # once to calculate the gradients.
-        with tf.GradientTape(persistent=True) as tape:
+        with tf.GradientTape(persistent=True) as tape: # Record operations for automatic differentiation.
             # Generator G translates X -> Y
             # Generator F translates Y -> X.
             
+            # 1. Get the predictions.
             fake_y = self.generator_g(real_x, training=True)
             cycled_x = self.generator_f(fake_y, training=True)
 
-            
             fake_x = self.generator_f(real_y, training=True)
             cycled_y = self.generator_g(fake_x, training=True)
 
@@ -189,45 +202,64 @@ class CycleGANModel:
             disc_fake_x = self.discriminator_x(fake_x, training=True)
             disc_fake_y = self.discriminator_y(fake_y, training=True)
 
-            # calculate the loss
+            # 2. Calculate the loss
+            # adversarial loss for generators
             gen_g_loss = self.generator_loss(disc_fake_y)
             gen_f_loss = self.generator_loss(disc_fake_x)
-            
+            # cycle loss
             total_cycle_loss = self.calc_cycle_loss(real_x, cycled_x) + self.calc_cycle_loss(real_y, cycled_y)
             
-            # Total generator loss = self.adversarial loss + cycle loss
+            # Total generator loss = adversarial loss + cycle loss
             total_gen_g_loss = gen_g_loss + total_cycle_loss + self.identity_loss(real_y, same_y)
             total_gen_f_loss = gen_f_loss + total_cycle_loss + self.identity_loss(real_x, same_x)
 
             disc_x_loss = self.discriminator_loss(disc_real_x, disc_fake_x)
             disc_y_loss = self.discriminator_loss(disc_real_y, disc_fake_y)
         
-            # Calculate the gradients for generator and discriminator
-            generator_g_gradients = tape.gradient(total_gen_g_loss, 
-                                                    self.generator_g.trainable_variables)
-            generator_f_gradients = tape.gradient(total_gen_f_loss, 
-                                                    self.generator_f.trainable_variables)
+        # 3. Calculate the gradients for generator and discriminator using backpropagation.
+        # target(first arg) will be differentiated against elements in sources (second arg).
+        generator_g_gradients = tape.gradient(total_gen_g_loss, 
+                                                self.generator_g.trainable_variables)
+        generator_f_gradients = tape.gradient(total_gen_f_loss, 
+                                                self.generator_f.trainable_variables)
             
-            discriminator_x_gradients = tape.gradient(disc_x_loss, 
-                                                        self.discriminator_x.trainable_variables)
-            discriminator_y_gradients = tape.gradient(disc_y_loss, 
-                                                        self.discriminator_y.trainable_variables)
+        discriminator_x_gradients = tape.gradient(disc_x_loss, 
+                                                    self.discriminator_x.trainable_variables)
+        discriminator_y_gradients = tape.gradient(disc_y_loss, 
+                                                    self.discriminator_y.trainable_variables)
             
-            # Apply the gradients to the optimizer
-            gself.enerator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
-                                                        self.generator_g.trainable_variables))
+        # 4. Apply the gradients to the optimizer
+        self.enerator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
+                                                    self.generator_g.trainable_variables))
 
-            self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, 
-                                                        self.generator_f.trainable_variables))
+        self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, 
+                                                    self.generator_f.trainable_variables))
+        
+        self.discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients,
+                                                        self.discriminator_x.trainable_variables))
+        
+        self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
+                                                        self.discriminator_y.trainable_variables))
+
+    def generate_images(model, test_input):
+        prediction = model(test_input)
             
-            self.discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients,
-                                                            self.discriminator_x.trainable_variables))
-            
-            self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
-                                                            self.discriminator_y.trainable_variables))
+        plt.figure(figsize=(12, 12))
+
+        display_list = [test_input[0], prediction[0]]
+        title = ['Input Image', 'Predicted Image']
+
+        for i in range(2):
+            plt.subplot(1, 2, i+1) # (rows, cols)
+            plt.title(title[i])
+            # getting the pixel values between [0, 1] to plot it.
+            plt.imshow(display_list[i] * 0.5 + 0.5)
+            plt.axis('off')
+        plt.show()
+
 
     def train(self, data_generator):
-        raise Error("Model training not yet implemented")
+        raise Exception("Model training not yet implemented")
     
         for epoch in range(hp.num_epochs):
             start = time.time()
@@ -237,12 +269,12 @@ class CycleGANModel:
                 self.train_step(image_x, image_y)
                 if n % 10 == 0:
                     print ('.', end='')
-                    n+=1
+                n+=1
 
             clear_output(wait=True)
             # Using a consistent image (sample_image) so that the progress of the model
             # is clearly visible.
-            generate_images(generator_g, sample_image)
+            generate_images(self.generator_g, sample_image)
 
             if (epoch + 1) % 5 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
