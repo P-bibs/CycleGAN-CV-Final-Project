@@ -274,7 +274,7 @@ class CycleGANModel:
             clear_output(wait=True)
             # Using a consistent image (sample_image) so that the progress of the model
             # is clearly visible.
-            generate_images(self.generator_g, sample_image)
+            self.generate_images(self.generator_g, sample_image)
 
             if (epoch + 1) % 5 == 0:
                 ckpt_save_path = self.ckpt_manager.save()

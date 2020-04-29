@@ -44,14 +44,13 @@ class Datasets():
   
     def push_data(self, path, train = True):
         # returns a generator for the specified data.
-        true_path = path
 
         data_gen = tf.keras.preprocessing.image.ImageDataGenerator(
             preprocessing_function = lambda im: self.preprocess_sequence(im, train))
 
         data_gen = data_gen.flow_from_directory(
-            true_path, 
-            target_size=(hp.image_size, hp.image_size),
+            path,
+            target_size=(hp.img_size, hp.img_size),
             class_mode = None,
             batch_size=hp.batch_size)
         return data_gen

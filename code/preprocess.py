@@ -78,19 +78,16 @@ class Datasets():
             data_gen = tf.keras.preprocessing.image.ImageDataGenerator(
                 preprocessing_function=self.preprocess_fn)
 
-        # VGG must take images of size 224x224
-        img_size = hp.img_size
-
-        classes_for_flow = None
-
-        # Make sure all data generators are aligned in label indices
-        if bool(self.idx_to_class):
+        classes_for_flow = None # Optional list of class subdirectories. If not provided, the list of classes
+                                # will be automatically inferred from the subdirectory names/structure
+        if bool(self.idx_to_class): # Make sure all data generators are aligned in label indices
             classes_for_flow = self.classes
 
         # Form image data generator from directory structure
+        # https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/image/ImageDataGenerator#flow_from_directory
         data_gen = data_gen.flow_from_directory(
             path,
-            target_size=(img_size, img_size),
+            target_size=(hp.img_size, hp.img_size),
             class_mode='sparse',
             batch_size=hp.batch_size,
             shuffle=shuffle,

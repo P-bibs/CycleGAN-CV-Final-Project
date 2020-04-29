@@ -3,7 +3,7 @@
 """Preprocess parameters"""
 #Pre-process parameters
 
-image_size = 128
+img_size = 128
 
 
 # Training parameters
