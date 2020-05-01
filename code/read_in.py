@@ -48,6 +48,7 @@ class Datasets():
         data_gen = tf.keras.preprocessing.image.ImageDataGenerator(
             preprocessing_function = lambda im: self.preprocess_sequence(im, train))
 
+        print("Creating data generator for %s" % path)
         data_gen = data_gen.flow_from_directory(
             path,
             target_size=(hp.img_size, hp.img_size),

@@ -270,15 +270,17 @@ class CycleGANModel:
             self.generate_images(self.generator_g, sample_image)
 
             n = 0
+            set_of_20_start_time = time.time()
             for image_x, image_y in zip(data_generator_x, data_generator_y):
                 self.train_step(image_x, image_y)
                 if n % 1 == 0:
                     print ('.', end='')
-                n+=1
-
+                if n % 20 == 0:
+                    print("20 images processed in %d time" % (time.time - set_of_20_start_time))
+                    set_of_20_start_time = time.time()
             print('Epoch %d Complete' % epoch)
 
-            if (epoch + 1) % 5 == 0:
+            if epoch % 1 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
                 print ('Saving checkpoint for epoch {} at {}'.format(epoch+1,
                                                                     ckpt_save_path))
