@@ -10,6 +10,8 @@ img_size = 128
 
 num_epochs = 50
 
+max_images_per_epoch = 1000
+
 batch_size = 10
 
 learning_rate = 0.0002

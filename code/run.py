@@ -44,6 +44,11 @@ def parse_args():
         help='''Skips training and evaluates on the test set once.
         You can use this to test an already trained model by loading
         its checkpoint.''')
+    parser.add_argument(
+        '--augment',
+        action='store_true',
+        help='''Augments image data''')
+
 
     return parser.parse_args()
 
@@ -99,7 +104,7 @@ def main():
     elif ARGS.dataset == "summer-winter":
         data_dir = "../data/summer2winter_yosemite"
 
-    datasets = Datasets(data_dir)
+    datasets = Datasets(data_dir, ARGS.augment)
 
     cycleGAN_model = CycleGANModel()
 
