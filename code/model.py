@@ -13,7 +13,6 @@ from os import listdir
 from numpy import asarray
 from numpy import vstack
 from tensorflow.keras.preprocessing.image import img_to_array
-from keras.preprocessing.image import load_img
 from numpy import savez_compressed
 import matplotlib.pyplot as plt
 
@@ -276,11 +275,13 @@ class CycleGANModel:
                 if n % 1 == 0:
                     print ('.', end='')
                 if n % 20 == 0:
-                    print("20 images processed in %d time" % (time.time - set_of_20_start_time))
+                    print("20 images processed in %d time" % (time.time() - set_of_20_start_time))
                     set_of_20_start_time = time.time()
                 if n >= hp.max_images_per_epoch:
                     break
+                n += 1
                 
+
             print('Epoch %d Complete' % epoch)
 
             if epoch % 1 == 0:
