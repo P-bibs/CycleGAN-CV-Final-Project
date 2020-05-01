@@ -4,16 +4,17 @@ import time
 import tensorflow as tf
 import hyperparameters as hp
 from tensorflow.keras.layers import \
-        Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose
+        Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose, Activation
 from tensorflow.keras.layers import LeakyReLU
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow_addons.layers import InstanceNormalization
 from os import listdir
 from numpy import asarray
 from numpy import vstack
 from tensorflow.keras.preprocessing.image import img_to_array
 from keras.preprocessing.image import load_img
 from numpy import savez_compressed
-from IPython.display import clear_output
 import matplotlib.pyplot as plt
 
 class CycleGANModel:
@@ -28,85 +29,114 @@ class CycleGANModel:
         self.initialize_checkpointer()
 
     def initialize_models(self):
+        init = RandomNormal(stddev=0.02)
+
         # this is only half an R256 layer, so it must be included twice
         R256 = Conv2D(256, 3, strides=1, activation='relu')
 
-        self.generator_g = Sequential([
-            # c7s1-64
-            Conv2D(64, 7, strides=1, activation='relu', input_shape=(hp.image_size**2,)),
-            # d128
-            Conv2D(128, 3, strides=2, activation='relu'),
-            # d256
-            Conv2D(256, 3, strides=2, activation='relu'),
-            # six R256 blocks
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            # u128: upsampling + convolution
-            Conv2DTranspose(128, 3, strides=2, activation='relu'),
-            # u64
-            Conv2DTranspose(64, 3, strides=2, activation='relu'),
-            # c7s1-3
-            Conv2D(3, 7, strides=1, activation='relu'),
-        ])
+        self.generator_g = Sequential()
+        # c7s1-64
+        self.generator_g.add(Conv2D(64, (7,7), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('relu'))
+        # d128
+        self.generator_g.add(Conv2D(128, (3,3), strides=(2,2), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('relu'))
+        # d256
+        self.generator_g.add(Conv2D(256, (3,3), strides=(2,2), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('relu'))
+        # R256
+        for _ in range(6):
+            # first convolutional layer
+            self.generator_g.add(Conv2D(256, (3,3), strides=(1,1), kernel_initializer=init))
+            self.generator_g.add(InstanceNormalization(axis=-1))
+            self.generator_g.add(Activation('relu'))
+            # second convolutional layer
+            self.generator_g.add(Conv2D(256, (3,3), strides=(1,1), kernel_initializer=init))
+            self.generator_g.add(InstanceNormalization(axis=-1))
+        # u128
+        self.generator_g.add(Conv2DTranspose(128, (3,3), strides=(2,2), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('relu'))
+        # u64
+        self.generator_g.add(Conv2DTranspose(64, (3,3), strides=(2,2), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('relu'))
+        # c7s1-3
+        self.generator_g.add(Conv2D(3, (7,7), padding='same', kernel_initializer=init))
+        self.generator_g.add(InstanceNormalization(axis=-1))
+        self.generator_g.add(Activation('tanh'))
 
-        self.generator_f = Sequential([
-            # c7s1-64
-            Conv2D(64, 7, strides=1, activation='relu', input_shape=(hp.image_size**2,)),
-            # d128
-            Conv2D(128, 3, strides=2, activation='relu'),
-            # d256
-            Conv2D(256, 3, strides=2, activation='relu'),
-            # six R256 blocks
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            # u128: upsampling + convolution
-            Conv2DTranspose(128, 3, strides=2, activation='relu'),
-            # u64
-            Conv2DTranspose(64, 3, strides=2, activation='relu'),
-            # c7s1-3
-            Conv2D(3, 7, strides=1, activation='relu'),
-        ])
+        print(self.generator_g.summary())
+        
+
+        self.generator_f = Sequential()
+        # c7s1-64
+        self.generator_f.add(Conv2D(64, 7, strides=1, activation='relu', input_shape=(hp.img_size,hp.img_size, 3)))
+        # d12
+        self.generator_f.add(Conv2D(128, 3, strides=2, activation='relu'))
+        # d25
+        self.generator_f.add(Conv2D(256, 3, strides=2, activation='relu'))
+        # six R256 block
+        for i in range(6):
+            self.generator_f.add(R256)
+            self.generator_f.add(R256)
+        # u128: upsampling + convolution
+        self.generator_f.add(Conv2DTranspose(128, 3, strides=2, activation='relu'))
+        # u6
+        self.generator_f.add(Conv2DTranspose(64, 3, strides=2, activation='relu'))
+        # c7s1-
+        self.generator_f.add(Conv2D(3, 7, strides=1, activation='relu'))
+
 
         # TODO: if this doesn't work, experiment with relu slope. Documentation is unclear
-        self.discriminator_x = Sequential([
-            # C64
-            Conv2D(64 , 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C128
-            Conv2D(128, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C256
-            Conv2D(256, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C512
-            Conv2D(512, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
-        ])
+        self.discriminator_x = Sequential()
 
-        self.discriminator_y = Sequential([
-            # C64
-            Conv2D(64 , 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C128
-            Conv2D(128, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C256
-            Conv2D(256, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # C512
-            Conv2D(512, 4, strides=2),
-            LeakyReLU(alpha=0.2),
-            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
-        ])
+        self.discriminator_x.add(Conv2D(64, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_x.add(LeakyReLU(alpha=0.2))
+        # C128
+        self.discriminator_x.add(Conv2D(128, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_x.add(InstanceNormalization(axis=-1))
+        self.discriminator_x.add(LeakyReLU(alpha=0.2))
+        # C256
+        self.discriminator_x.add(Conv2D(256, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_x.add(InstanceNormalization(axis=-1))
+        self.discriminator_x.add(LeakyReLU(alpha=0.2))
+        # C512
+        self.discriminator_x.add(Conv2D(512, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_x.add(InstanceNormalization(axis=-1))
+        self.discriminator_x.add(LeakyReLU(alpha=0.2))
+        # second last output layer
+        self.discriminator_x.add(Conv2D(512, (4,4), padding='same', kernel_initializer=init))
+        self.discriminator_x.add(InstanceNormalization(axis=-1))
+        self.discriminator_x.add(LeakyReLU(alpha=0.2))
+        # patch output
+        self.discriminator_x.add(Conv2D(1, (4,4), padding='same', kernel_initializer=init))
+
+        self.discriminator_y = Sequential()
+
+        self.discriminator_y.add(Conv2D(64, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_y.add(LeakyReLU(alpha=0.2))
+        # C128
+        self.discriminator_y.add(Conv2D(128, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_y.add(InstanceNormalization(axis=-1))
+        self.discriminator_y.add(LeakyReLU(alpha=0.2))
+        # C256
+        self.discriminator_y.add(Conv2D(256, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_y.add(InstanceNormalization(axis=-1))
+        self.discriminator_y.add(LeakyReLU(alpha=0.2))
+        # C512
+        self.discriminator_y.add(Conv2D(512, (4,4), strides=(2,2), padding='same', kernel_initializer=init))
+        self.discriminator_y.add(InstanceNormalization(axis=-1))
+        self.discriminator_y.add(LeakyReLU(alpha=0.2))
+        # second last output layer
+        self.discriminator_y.add(Conv2D(512, (4,4), padding='same', kernel_initializer=init))
+        self.discriminator_y.add(InstanceNormalization(axis=-1))
+        self.discriminator_y.add(LeakyReLU(alpha=0.2))
+        # patch output
+        self.discriminator_y.add(Conv2D(1, (4,4), padding='same', kernel_initializer=init))
 
     # load all images in a directory into memory
     # def load_images(path, size=(256,256)):
@@ -177,7 +207,7 @@ class CycleGANModel:
             ckpt.restore(self.ckpt_manager.latest_checkpoint)
             print ('Latest checkpoint restored!!')
 
-    @tf.function
+    # @tf.function
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
         # once to calculate the gradients.
@@ -229,7 +259,7 @@ class CycleGANModel:
                                                     self.discriminator_y.trainable_variables)
             
         # 4. Apply the gradients to the optimizer
-        self.enerator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
+        self.generator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
                                                     self.generator_g.trainable_variables))
 
         self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, 
@@ -241,7 +271,7 @@ class CycleGANModel:
         self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
                                                         self.discriminator_y.trainable_variables))
 
-    def generate_images(model, test_input):
+    def generate_images(self, model, test_input):
         prediction = model(test_input)
             
         plt.figure(figsize=(12, 12))
@@ -258,23 +288,25 @@ class CycleGANModel:
         plt.show()
 
 
-    def train(self, data_generator):
-        raise Exception("Model training not yet implemented")
-    
+    def train(self, data_generator_x, data_generator_y):
+        # raise Exception("Model training not yet implemented")
+        sample_image = next(data_generator_x)
+
         for epoch in range(hp.num_epochs):
             start = time.time()
 
+            # Using a consistent image (sample_image) so that the progress of the model
+            # is clearly visible.
+            self.generate_images(self.generator_g, sample_image)
+
             n = 0
-            for image_x, image_y in data_generator:
+            for image_x, image_y in zip(data_generator_x, data_generator_y):
                 self.train_step(image_x, image_y)
                 if n % 10 == 0:
                     print ('.', end='')
                 n+=1
 
-            clear_output(wait=True)
-            # Using a consistent image (sample_image) so that the progress of the model
-            # is clearly visible.
-            self.generate_images(self.generator_g, sample_image)
+            
 
             if (epoch + 1) % 5 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
