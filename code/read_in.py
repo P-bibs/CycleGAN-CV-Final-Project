@@ -1,17 +1,22 @@
 
 import os
 import numpy as np
+from skimage.io import imread
+from skimage.transform import resize
 import tensorflow as tf
 import imgaug as ia
 from imgaug import augmenters as iaa
 import hyperparameters as hp
 
 class Datasets():
-    def __init__(self, dat_dir):
+    def __init__(self, dat_dir, merge_test = False):
         self.train_A_path = os.path.join(dat_dir, 'trainA')
         self.train_B_path = os.path.join(dat_dir, 'trainB')
         self.test_A_path = os.path.join(dat_dir, 'testA')
         self.test_B_path = os.path.join(dat_dir, 'testB')
+
+        self.merge_test = merge_test
+        # If True, train contains both test and train images
 
         self.train_A = self.push_data(self.train_A_path)
         self.train_B = self.push_data(self.train_B_path)
@@ -55,3 +60,22 @@ class Datasets():
             batch_size=hp.batch_size)
         return data_gen
 
+class custom_data_generator(Sequence):
+    # May be a good replacement for the keras generator above
+    # Note: takes image directory directly, no filler file. Run with _iter_
+
+    def __init__(self, path, img_size, preprocess_function, batch_size):
+        self.image_size = image_size
+        self.files = os.lsdir(path)
+        self.preprocess_function = preprocess_function
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.ceil(len(self.files) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        batch_x = self.files[idx * self.batch_size:(idx + 1) * self.batch_size]
+
+        return np.array([
+            resize(imread(os.path.join(path, file_name)), self.img_size)
+               for file_name in batch_x])
