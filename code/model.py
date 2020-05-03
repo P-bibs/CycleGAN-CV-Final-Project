@@ -57,7 +57,7 @@ def create_generator(input_shape):
         # weight initialization
         init = RandomNormal(stddev=0.02)
         # first layer convolutional layer
-        g = BatchNormalization(axis=-1)(g)
+        g = BatchNormalization(axis=-1)(input_layer)
         g = Activation('relu')(g)
         g = Conv2D(n_filters, (3,3), padding='same', kernel_initializer=init)(input_layer)
         # second convolutional layer
@@ -179,7 +179,8 @@ class CycleGANModel:
             print ('Latest checkpoint restored!!')
 
     # generator history bins stabilize oscillations in training
-    g_history,  f_history= [], []
+    g_history = []
+    f_history = []
 
     @tf.function
     def train_step(self, real_x, real_y):
@@ -215,8 +216,13 @@ class CycleGANModel:
             disc_real_x = self.discriminator_x(real_x, training=True)
             disc_real_y = self.discriminator_y(real_y, training=True)
 
+            # For discriminator loss
             disc_fake_x_rand = self.discriminator_x(random.choice(f_history), training=True)
             disc_fake_y_rand = self.discriminator_y(random.choice(g_history), training=True)
+
+            # For generator loss
+            disc_fake_x = self.discriminator_x(fake_x, training=True)
+            disc_fake_y = self.discriminator_y(fake_y, training=True)
 
             # 2. Calculate the loss
             # adversarial loss for generators

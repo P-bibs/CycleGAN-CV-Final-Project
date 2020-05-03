@@ -5,7 +5,7 @@ from read_in import Datasets
 
 # Standalone script to visualize augmented data
 
-data = Datasets("C:\\Users\\dichi\\Documents\\Brown CS\\CSCI 1430\\Cycle_GAN\\Cycle_GAN_Data\\horse2zebra")
+data = Datasets("C:\\Users\\dichi\\Documents\\Brown CS\\CSCI 1430\\Git_projects\\CycleGAN-CV-Final-Project\\data\\apple2orange")
 
 # Batches to read
 batches = 2
@@ -35,4 +35,4 @@ def block2pane(batch, shape):
 for i in config:
     sample = block2pane(batch_extractor(i, batches), layout)
     im = Image.fromarray(sample, 'RGB')
-    im.show()
+    im.save()
