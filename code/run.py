@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument(
         '--dataset',
         required=True,
-        choices=['horse-zebra', 'day-night', 'apples-oranges', 'summer-winter'],
+        choices=['horse-zebra', 'day-night', 'apples-oranges', 'summer-winter', 'horse-giraffe'],
         help='''Which dataset to run''')
     parser.add_argument(
         '--data',
@@ -103,13 +103,15 @@ def main():
         data_dir = "../data/apple2orange"
     elif ARGS.dataset == "summer-winter":
         data_dir = "../data/summer2winter_yosemite"
+    elif ARGS.dataset == "horse-giraffe":
+        data_dir = "../data/horse2giraffe"
 
     datasets = Datasets(data_dir, ARGS.augment)
 
     cycleGAN_model = CycleGANModel()
 
     if ARGS.evaluate:
-        cycleGAN_model.test(datasets.test_A, datasets.test_B)
+        cycleGAN_model.test(datasets.train_A, datasets.train_B)
     else:
         cycleGAN_model.train(datasets.train_A, datasets.train_B)
 
