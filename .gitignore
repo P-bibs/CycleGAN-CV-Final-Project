@@ -10,3 +10,8 @@ results/*
 *.fls
 *.fdb_latexmk
 *.aux
+ckpt*
+checkpoint
+*.jpg
+*.jpeg
+*.gif
