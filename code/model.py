@@ -270,12 +270,17 @@ class CycleGANModel:
 
             n = 0
             set_of_20_start_time = time.time()
+            batch_20_times = []
             for image_x, image_y in zip(data_generator_x, data_generator_y):
                 self.train_step(image_x, image_y)
                 if n % 1 == 0:
                     print ('.', end='')
                 if n % 20 == 0:
+                    batch_20_times.append(time.time() - set_of_20_start_time)
+                    mean = sum(batch_20_times) / len(batch_20_times) / 20
                     print("20 images processed in %d time" % (time.time() - set_of_20_start_time))
+                    print("Approximately %f remaining" % int(mean*(hp.max_images_per_epoch-n)))
+                    
                     set_of_20_start_time = time.time()
                 if n >= hp.max_images_per_epoch:
                     break
@@ -286,10 +291,10 @@ class CycleGANModel:
 
             if epoch % 1 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
-                print ('Saving checkpoint for epoch {} at {}'.format(epoch+1,
+                print ('Saving checkpoint for epoch {} at {}'.format(epoch,
                                                                     ckpt_save_path))
 
-            print ('Time taken for epoch {} is {} sec\n'.format(epoch + 1,
+            print ('Time taken for epoch {} is {} sec\n'.format(epoch,
                                                                 time.time()-start))
 
     def test(self, data_generator):
