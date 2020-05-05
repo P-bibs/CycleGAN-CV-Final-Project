@@ -13,10 +13,15 @@ class Datasets():
         self.test_A_path = os.path.join(dat_dir, 'testA')
         self.test_B_path = os.path.join(dat_dir, 'testB')
 
-        self.train_A = self.push_data(self.train_A_path)
-        self.train_B = self.push_data(self.train_B_path)
-        self.test_A = self.push_data(self.test_A_path, False)
-        self.test_B = self.push_data(self.test_B_path, False)
+        # self.train_A = self.push_data(self.train_A_path)
+        # self.train_B = self.push_data(self.train_B_path)
+        # self.test_A = self.push_data(self.test_A_path, False)
+        # self.test_B = self.push_data(self.test_B_path, False)
+
+        self.train_A = self.push_data(dat_dir + 'train')
+        self.train_B = self.push_data(dat_dir + 'train')
+        self.test_A = self.push_data(dat_dir + 'test')
+        self.test_B = self.push_data(dat_dir + 'test')
 
     def preprocess_sequence(self, img, augment):
         # Required for some augmentations
@@ -47,11 +52,12 @@ class Datasets():
 
         data_gen = tf.keras.preprocessing.image.ImageDataGenerator(
             preprocessing_function = lambda im: self.preprocess_sequence(im, train))
-
+        
+        # Takes the path to a directory & generates batches of augmented data.
         data_gen = data_gen.flow_from_directory(
             path,
-            target_size=(hp.img_size, hp.img_size),
+            target_size = (hp.img_size, hp.img_size),
             class_mode = None,
-            batch_size=hp.batch_size)
+            batch_size = hp.batch_size)
         return data_gen
 

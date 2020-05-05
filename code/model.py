@@ -1,20 +1,128 @@
 """Models for the network"""
 import time
-
+import numpy as np
 import tensorflow as tf
 import hyperparameters as hp
 from tensorflow.keras.layers import \
-        Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose
-from tensorflow.keras.layers import LeakyReLU
+    LeakyReLU, Activation, Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose, Concatenate, Input, Layer, InputSpec
 from tensorflow.keras.models import Sequential
+from tensorflow_addons.layers import InstanceNormalization
+from tensorflow.keras.initializers import RandomNormal
 from os import listdir
-from numpy import asarray
-from numpy import vstack
+# from numpy import asarray
 from tensorflow.keras.preprocessing.image import img_to_array
-from keras.preprocessing.image import load_img
-from numpy import savez_compressed
+# from keras.preprocessing.image import load_img
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
+
+# Combination of:
+# https://stackoverflow.com/questions/50677544/reflection-padding-conv2d
+# https://github.com/misgod/fast-neural-style-keras/blob/master/layers.py
+class ReflectionPadding2D(Layer):
+    def __init__(self, padding=(1, 1), **kwargs):
+        self.padding = tuple(padding)
+        if len(padding) == 2:
+            self.top_pad = padding[0]
+            self.bottom_pad = padding[0]
+            self.left_pad = padding[1]
+            self.right_pad = padding[1]
+        elif len(padding) == 4:
+            self.top_pad = padding[0]
+            self.bottom_pad = padding[1]
+            self.left_pad = padding[2]
+            self.right_pad = padding[3]
+        else:
+            raise TypeError('`padding` should be tuple of int '
+                            'of length 2 or 4, or dict. '
+                            'Found: ' + str(padding))
+        self.input_spec = [InputSpec(ndim=4)]
+        super(ReflectionPadding2D, self).__init__(**kwargs)
+
+    def compute_output_shape(self, s):
+        if s[1] == None:
+            return (None, None, None, s[3])
+        return (s[0], s[1] + 2 * self.padding[0], s[2] + 2 * self.padding[1], s[3])
+
+    def call(self, x, mask=None):
+        top_pad=self.top_pad
+        bottom_pad=self.bottom_pad
+        left_pad=self.left_pad
+        right_pad=self.right_pad        
+        return tf.pad(x, [[0, 0], [left_pad,right_pad], [top_pad,bottom_pad], [0, 0]], 'REFLECT')
+
+    def get_config(self):
+        config = super(ReflectionPadding2D, self).get_config()
+        print(config)
+        return config
+    
+
+def create_generator(input_shape):
+    # generator a resnet block
+    def resnet_block(n_filters, input_layer, i):
+        # weight initialization
+        init = RandomNormal(stddev=0.02)
+        # first layer convolutional layer
+        g = input_layer
+        g = ReflectionPadding2D(padding=(1, 1))(g)
+        g = Conv2D(n_filters, (3,3), strides = 1, kernel_initializer=init)(g)
+        g = InstanceNormalization(axis=-1)(g)
+        g = Activation('relu')(g)
+        # print(i, "1", "(None, 32, 32, 256)", g.shape)
+        # second convolutional layer
+        g = ReflectionPadding2D(padding=(1, 1))(g)
+        g = Conv2D(n_filters, (3,3), strides = 1, kernel_initializer=init)(g)
+        g = InstanceNormalization(axis=-1)(g)
+        # print(i, "2", "(None, 32, 32, 256)", g.shape)
+        # concatenate merge channel-wise with input layer
+        g = Concatenate()([g, input_layer])
+        return g
+
+    init = RandomNormal(stddev=0.02)
+
+    inputs = Input(shape=input_shape)
+    outputs = inputs
+    # c7s1-64
+    outputs = ReflectionPadding2D(padding=(3, 3))(outputs)
+    outputs = Conv2D(64, (7,7), strides=1, kernel_initializer=init, input_shape=input_shape)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('relu')(outputs)
+    # print("c7s1-64 (None, 128, 128, 64)", outputs.shape)
+    # d128
+    outputs = ReflectionPadding2D(padding=(1, 1))(outputs)
+    outputs = Conv2D(128, (3,3), strides=2, kernel_initializer=init)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('relu')(outputs)
+    # print("d128 (None, 64, 64, 128)", outputs.shape)
+    # d256
+    outputs = ReflectionPadding2D(padding=(1, 1))(outputs)
+    outputs = Conv2D(256, (3,3), strides=2, kernel_initializer=init)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('relu')(outputs)
+    # print("d256 (None, 32, 32, 256)", outputs.shape)
+    # R256
+        # We use 6 residual blocks for 128 × 128 training images,
+        # and 9 residual blocks for 256 × 256 or higher-resolution training images.
+    for i in range(6):
+        outputs = resnet_block(256, outputs, i)
+    # u128
+    outputs = Conv2DTranspose(128, (3,3), strides=2, padding='same', kernel_initializer=init)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('relu')(outputs)
+    # print("u128 (None, 64, 64, 128)", outputs.shape)
+    # u64
+    outputs = Conv2DTranspose(64, (3,3), strides=2, padding='same', kernel_initializer=init)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('relu')(outputs)
+    # print("u64 (None, 128, 128, 64)", outputs.shape)
+    # c7s1-3
+    outputs = ReflectionPadding2D(padding=(3, 3))(outputs)
+    outputs = Conv2D(3, (7,7), strides=1, kernel_initializer=init)(outputs)
+    outputs = InstanceNormalization(axis=-1)(outputs)
+    outputs = Activation('tanh')(outputs)
+    # print("c7s1-3 (None, 128, 128, 3)", outputs.shape)
+
+    return tf.keras.Model(inputs=inputs, outputs=outputs)
+
 
 class CycleGANModel:
     def __init__(self):
@@ -28,85 +136,49 @@ class CycleGANModel:
         self.initialize_checkpointer()
 
     def initialize_models(self):
-        # this is only half an R256 layer, so it must be included twice
-        R256 = Conv2D(256, 3, strides=1, activation='relu')
 
-        self.generator_g = Sequential([
-            # c7s1-64
-            Conv2D(64, 7, strides=1, activation='relu', input_shape=(hp.image_size**2,)),
-            # d128
-            Conv2D(128, 3, strides=2, activation='relu'),
-            # d256
-            Conv2D(256, 3, strides=2, activation='relu'),
-            # six R256 blocks
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            # u128: upsampling + convolution
-            Conv2DTranspose(128, 3, strides=2, activation='relu'),
-            # u64
-            Conv2DTranspose(64, 3, strides=2, activation='relu'),
-            # c7s1-3
-            Conv2D(3, 7, strides=1, activation='relu'),
-        ])
+        self.generator_g = create_generator((hp.img_size, hp.img_size, 3))
+        self.generator_f = create_generator((hp.img_size, hp.img_size, 3))
 
-        self.generator_f = Sequential([
-            # c7s1-64
-            Conv2D(64, 7, strides=1, activation='relu', input_shape=(hp.image_size**2,)),
-            # d128
-            Conv2D(128, 3, strides=2, activation='relu'),
-            # d256
-            Conv2D(256, 3, strides=2, activation='relu'),
-            # six R256 blocks
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            R256, R256,
-            # u128: upsampling + convolution
-            Conv2DTranspose(128, 3, strides=2, activation='relu'),
-            # u64
-            Conv2DTranspose(64, 3, strides=2, activation='relu'),
-            # c7s1-3
-            Conv2D(3, 7, strides=1, activation='relu'),
-        ])
-
-        # TODO: if this doesn't work, experiment with relu slope. Documentation is unclear
         self.discriminator_x = Sequential([
             # C64
             Conv2D(64 , 4, strides=2),
             LeakyReLU(alpha=0.2),
             # C128
             Conv2D(128, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
             # C256
             Conv2D(256, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
             # C512
             Conv2D(512, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
-            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
-        ])
-
+            # After the last layer, we apply a convolution to produce a 1-dimensional output.
+            Conv2D(1, 4, strides=1)
+            ])
+        
         self.discriminator_y = Sequential([
             # C64
             Conv2D(64 , 4, strides=2),
             LeakyReLU(alpha=0.2),
             # C128
             Conv2D(128, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
             # C256
             Conv2D(256, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
             # C512
             Conv2D(512, 4, strides=2),
+            InstanceNormalization(axis=-1),
             LeakyReLU(alpha=0.2),
-            # After the last layer, we apply a convolution to produce a 1-dimensional output. 
-        ])
+            # After the last layer, we apply a convolution to produce a 1-dimensional output.
+            Conv2D(1, 4, strides=1)
+            ])
 
     # load all images in a directory into memory
     # def load_images(path, size=(256,256)):
@@ -119,7 +191,7 @@ class CycleGANModel:
     #         pixels = img_to_array(pixels)
     #         # store
     #         data_list.append(pixels)
-    #     return asarray(data_list)
+    #     return np.asarray(data_list)
     
     def initialize_loss_functions(self):
         loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
@@ -187,6 +259,8 @@ class CycleGANModel:
             
             # 1. Get the predictions.
             fake_y = self.generator_g(real_x, training=True)
+            print("real_x.shape", real_x.shape)
+            print("fake_y.shape", fake_y.shape)
             cycled_x = self.generator_f(fake_y, training=True)
 
             fake_x = self.generator_f(real_y, training=True)
@@ -229,7 +303,7 @@ class CycleGANModel:
                                                     self.discriminator_y.trainable_variables)
             
         # 4. Apply the gradients to the optimizer
-        self.enerator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
+        self.generator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
                                                     self.generator_g.trainable_variables))
 
         self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, 
@@ -241,14 +315,15 @@ class CycleGANModel:
         self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
                                                         self.discriminator_y.trainable_variables))
 
-    def generate_images(model, test_input):
+    def generate_images(self, model, test_input, epoch, n):
         prediction = model(test_input)
             
         plt.figure(figsize=(12, 12))
 
-        display_list = [test_input[0], prediction[0]]
-        title = ['Input Image', 'Predicted Image']
-
+        display_list = [np.squeeze(test_input, axis=0), np.squeeze(prediction, axis=0)]
+        title1 = 'Input Image at epoch ' + str(epoch) + ' image ' + str(n)
+        title2 = 'Predicted Image at epoch ' + str(epoch) + " image " + str(n)
+        title = [title1, title2]
         for i in range(2):
             plt.subplot(1, 2, i+1) # (rows, cols)
             plt.title(title[i])
@@ -258,25 +333,34 @@ class CycleGANModel:
         plt.show()
 
 
-    def train(self, data_generator):
-        raise Exception("Model training not yet implemented")
-    
+    def train(self, train_x, train_y):
+        # raise Exception("Model training not yet implemented")
+        print("Beginning training")
+
         for epoch in range(hp.num_epochs):
+
             start = time.time()
 
-            n = 0
-            for image_x, image_y in data_generator:
-                self.train_step(image_x, image_y)
-                if n % 10 == 0:
-                    print ('.', end='')
-                n+=1
+            n_image = 0
+            for batch_image_x, batch_image_y in zip(train_x, train_y):
+                for i in range(hp.batch_size):
+                    image_x = np.expand_dims(batch_image_x[i], axis=0)
+                    image_y = np.expand_dims(batch_image_y[i], axis=0)
+                    self.train_step(image_x, image_y) # ignoring batch size/update for every image
+                    if n_image % 10 == 0:
+                        # print ('.', end='')
+                        print("Sample image at epoch", epoch, "image", n_image)
+                        sample_image = image_x
+                        self.generate_images(self.generator_g, sample_image, epoch, n_image)
+                    if n_image >= hp.max_images_per_epoch:
+                        break
+                    n_image+=1
 
             clear_output(wait=True)
             # Using a consistent image (sample_image) so that the progress of the model
             # is clearly visible.
-            self.generate_images(self.generator_g, sample_image)
 
-            if (epoch + 1) % 5 == 0:
+            if epoch % 1 == 0: # (epoch + 1) % 5 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
                 print ('Saving checkpoint for epoch {} at {}'.format(epoch+1,
                                                                     ckpt_save_path))
@@ -286,4 +370,4 @@ class CycleGANModel:
 
     def test(self, data_generator):
         # TODO: add model evaluation
-        raise Error("Model evaluation not yet implemented")
+        raise Exception("Model evaluation not yet implemented")

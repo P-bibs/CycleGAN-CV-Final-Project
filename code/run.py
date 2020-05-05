@@ -5,7 +5,8 @@ import argparse
 import tensorflow as tf
 from model import CycleGANModel
 import hyperparameters as hp
-from read_in import Datasets
+from new_read_in import Datasets
+# from tensorboard_utils import ImageLabelingLogger, ConfusionMatrixLogger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -47,34 +48,34 @@ def parse_args():
 
     return parser.parse_args()
 
-def train(model, datasets, checkpoint_path):
-    """ Training routine. """
+# def train(model, datasets, checkpoint_path):
+#     """ Training routine. """
 
-    # Keras callbacks for training
-    callback_list = [
-        tf.keras.callbacks.ModelCheckpoint(
-            filepath=checkpoint_path + \
-                    "weights.e{epoch:02d}.h5",
-            save_best_only=True,
-            save_weights_only=False),
-        tf.keras.callbacks.TensorBoard(
-            update_freq='batch',
-            profile_batch=0),
-        ImageLabelingLogger(datasets)
-    ]
+#     # Keras callbacks for training
+#     callback_list = [
+#         tf.keras.callbacks.ModelCheckpoint(
+#             filepath=checkpoint_path + \
+#                     "weights.e{epoch:02d}.h5",
+#             save_best_only=True,
+#             save_weights_only=False),
+#         tf.keras.callbacks.TensorBoard(
+#             update_freq='batch',
+#             profile_batch=0),
+#         ImageLabelingLogger(datasets)
+#     ]
 
-    # Include confusion logger in callbacks if flag set
-    if ARGS.confusion:
-        callback_list.append(ConfusionMatrixLogger(datasets))
+#     # Include confusion logger in callbacks if flag set
+#     if ARGS.confusion:
+#         callback_list.append(ConfusionMatrixLogger(datasets))
 
-    # Begin training
-    model.fit(
-        x=datasets.train_data,
-        validation_data=datasets.test_data,
-        epochs=hp.num_epochs,
-        batch_size=None,
-        callbacks=callback_list,
-    )
+#     # Begin training
+#     model.fit(
+#         x=datasets.train_data,
+#         validation_data=datasets.test_data,
+#         epochs=hp.num_epochs,
+#         batch_size=None,
+#         callbacks=callback_list,
+#     )
 
 def test(model, test_data):
     """ Testing routine. """
@@ -89,10 +90,11 @@ def test(model, test_data):
 def main():
     """ Main function. """
     if ARGS.dataset == "horse-zebra":
-        data_dir = "../data/horse2zebra"
+        # data_dir = "../data/horse2zebra"
+        data_dir = "/Users/annawei/2019-2020/cs1430/CycleGAN-CV-Final-Project/data/horse2zebra/"
     elif ARGS.dataset == "day-night":
         # TODO: get day to night data
-        raise Error("Day-night data not yet gathered")
+        raise Exception("Day-night data not yet gathered")
         data_dir = ""
     elif ARGS.dataset == "apples-oranges":
         data_dir = "../data/apple2orange"
@@ -104,9 +106,10 @@ def main():
     cycleGAN_model = CycleGANModel()
 
     if ARGS.evaluate:
-        cycleGAN_model.test(datasets.test_A)
+       raise Exception("test function in model.py not yet written")
+        # cycleGAN_model.test(datasets.test_A)
     else:
-        cycleGAN_model.train(datasets.train_A)
+        cycleGAN_model.train(datasets.train_A, datasets.train_B)
 
 
 # Make arguments global
