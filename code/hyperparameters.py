@@ -8,11 +8,13 @@ img_size = 128
 
 # Training parameters
 
-num_epochs = 50
+num_epochs = 25
 
-batch_size = 10
+batch_size = 5
 
-generator_history_size = 20
+max_images_per_epoch  = 1000
+
+generator_history_size = 10
 
 learning_rate = 0.0002
 

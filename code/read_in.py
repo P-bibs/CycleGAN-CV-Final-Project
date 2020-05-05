@@ -4,10 +4,8 @@ import numpy as np
 import random
 from skimage.io import imread
 from skimage.transform import resize
-import tensorflow as tf
 import imgaug as ia
 from imgaug import augmenters as iaa
-from imgaug import multicore
 import time
 import hyperparameters as hp
 
@@ -23,9 +21,9 @@ class Datasets():
         self.test_A = self.push_data(self.test_A_path, False)
         self.test_B = self.push_data(self.test_B_path, False)
 
-    def preprocess_sequence(self, ims, augment):
-        def normalize(batch, random_state, parents, hooks):
-            return batch.astype(np.float32) / 255
+    def preprocess(self, ims, augment):
+        def normalize(batch):
+            return batch.astype(np.float32) / float(255)
         if augment:
             augmentations = iaa.Sequential([
                 iaa.Resize(int(1.1*hp.img_size)),
@@ -40,25 +38,27 @@ class Datasets():
                 iaa.CropToFixedSize(hp.img_size, hp.img_size), iaa.Resize(hp.img_size),
                 iaa.Sometimes(0.3,
                 iaa.SaltAndPepper(0.01)),
-                iaa.CLAHE(to_colorspace='HSV'),
-                iaa.Lambda(func_images=normalize)])
-            augmentations = multicore.Pool(augmentations)
+                iaa.CLAHE(to_colorspace='HSV')])
         else:
-            augmentations = multicore.Pool([iaa.CLAHE(to_colorspace='HSV'), iaa.Lambda(func_images=normalize)])
+            augmentations = ia.Sequential([iaa.CLAHE(to_colorspace='HSV')])
         
-        augmented = augmentations.imap_batches_unordered(ims)
-        return augmented       
+        augmented = augmentations.augment_images(ims)
+        for i in augmented:
+            if i.shape !=(hp.img_size, hp.img_size, 3):
+                print(i.shape)
+        augmented = np.stack(augmented, axis = 0)
+        return normalize(augmented)    
   
     def push_data(self, path, train = True):
         # returns a generator for the specified data
         data_generator = custom_data_generator(path, (hp.img_size, hp.img_size), 
-            self.preprocess_sequence, hp.batch_size, True, None)
+            self.preprocess, hp.batch_size, True, 1.5)
+            # threshold of 1.5 should limit augmentation time to 15 min per epoch
         datagen = data_generator.datagen()
         return datagen
 
 class custom_data_generator():
-    # May be a good replacement for the keras generator above
-    # Note: takes image directory directly, no filler file. Run with _iter_
+    # Note: As configured, this generator passes over incomplete batches. This may be problematic for larger batch sizes
 
     def __init__(self, path, img_size, preprocess_function, batch_size, augment, aug_threshold):
         self.img_size = img_size
@@ -67,52 +67,58 @@ class custom_data_generator():
         self.preprocess_function = preprocess_function
         self.augment = augment
         self.batch_size = batch_size
-        self.length = int(np.ceil(len(self.files) / float(self.batch_size)))
+        # Parameters for adaptive augmentation
         self.aug_threshold = aug_threshold
-        self.aug_time = []
+        self.aug_time = 0
+        self.sample_size = 5
 
     def get_batch(self, idx):
-        start= time.time()
-        if self.batch_size * (idx+1) >= self.length:
-            batch_x = self.files[idx * self.batch_size:]
-            batch_x = [resize(imread(os.path.join(self.path, file_name)), self.img_size)
-               for file_name in batch_x]
-            batch_x = np.concatenate(batch_x, axis = 0)
-        else: 
-            batch_x = self.files[idx * self.batch_size:(idx + 1) * self.batch_size]
-            batch_x = [resize(imread(os.path.join(self.path, file_name)), self.img_size)
-               for file_name in batch_x]
-            batch_x = np.concatenate(batch_x, axis = 0)
 
-        self.aug_time += start - time.time()
+        def read_proper(name):
+            imarray = imread(os.path.join(self.path, name))
+            imarray = resize(imarray, self.img_size, preserve_range = True).astype('uint8')
+            if len(imarray.shape)==2: 
+                imarray = np.stack([imarray for _ in range(3)], axis = -1)
+            elif imarray.shape[2]==1:
+                imarray = np.concatenate([imarray for _ in range(3)], axis = 2)
+            return imarray
+            
+        start= time.time()
+        batch_x = self.files[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_x = [read_proper(file_name) for file_name in batch_x]
+
+        if idx == self.sample_size:
+            self.aug_time = 0
+        if idx < 2 * self.sample_size:
+            self.aug_time += time.time() - start
         return batch_x
     
     def adaptive_augment(self, idx):
         # Selectively augments batchs to keep average augmentation time below a threshold
         # Set threshold to None to turn off
-        sample_size = 5
         if self.aug_threshold == None:
             pass
-        elif idx == sample_size:
-            avg_time = sum(self.aug_time) / float(sample_size * self.batch_size)
-            p = self.aug_threshold / float(avg_time)
+        elif idx == self.sample_size:
+            avg_time = self.aug_time / float(self.sample_size * self.batch_size)
+            p = self.aug_threshold / avg_time
             if p >= 1:
                 p = 1
                 self.augment = True
                 self.aug_threshold = None
-            print("Average augmentation time per image is", avg_time, "seconds.")
-            print("Augmention now set to run for", p*100, "%% of batches.")
-        else:
+            print("Average augmentation time per image is "+str(avg_time)+ " seconds. \n")
+            per = (p*100)
+            print("Augmention now set to run for " + str(per) + " percent of batches. \n")
+        elif idx == 2* self.sample_size:
+            avg_time = self.aug_time / float(self.sample_size * self.batch_size)
+            print("Average augmentation time is now", avg_time, "seconds per image. \n")
+        elif idx > self.sample_size:
             self.augment = (random.random() < p)
 
-    def generator(self):
+    def datagen(self):
         n = -1
         while True:
             n += 1
-            if n == self.length: n = -1
+            if self.batch_size * (n+1) >= len(self.files): n = 0
             self.adaptive_augment(n)
-            yield self.get_batch(n)
-
-    def datagen(self):
-        base = self.generator()
-        return self.preprocess_function(base, self.augment)
+            out = self.preprocess_function(self.get_batch(n), self.augment)
+            yield out

@@ -104,9 +104,10 @@ def main():
     cycleGAN_model = CycleGANModel()
 
     if ARGS.evaluate:
-        cycleGAN_model.test(datasets.test_A)
+        cycleGAN_model.test(datasets.test_A, datasets.test_B)
     else:
-        cycleGAN_model.train(datasets.train_A)
+        cycleGAN_model.train(datasets.train_A, datasets.train_B)
+
 
 
 # Make arguments global

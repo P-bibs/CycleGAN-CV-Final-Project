@@ -4,7 +4,7 @@ import time
 import tensorflow as tf
 import hyperparameters as hp
 from tensorflow.keras.layers import \
-        Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose, Activation, Input, Concatenate
+        Conv2D, MaxPool2D, Dropout, Flatten, Dense, Conv2DTranspose, Activation, Input, Concatenate, BatchNormalization
 from tensorflow.keras.layers import LeakyReLU
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.initializers import RandomNormal
@@ -12,7 +12,8 @@ from tensorflow_addons.layers import InstanceNormalization
 from os import listdir
 from numpy import asarray
 from numpy import vstack
-import random as random
+import numpy as np
+import random
 from tensorflow.keras.preprocessing.image import img_to_array
 from numpy import savez_compressed
 import matplotlib.pyplot as plt
@@ -113,6 +114,12 @@ class CycleGANModel:
         self.initialize_optimizers()
         print("Initializing checkpointer")
         self.initialize_checkpointer()
+        self.generator_queue = tf.queue.FIFOQueue(
+                    hp.generator_history_size * hp.batch_size, 
+                    ('float32', 'float32'),
+                    shapes = (tf.TensorShape([hp.img_size, hp.img_size, 3]),
+                    tf.TensorShape([hp.img_size, hp.img_size, 3])))
+        
 
     def initialize_models(self):
         input_shape = (hp.img_size, hp.img_size, 3)
@@ -123,7 +130,7 @@ class CycleGANModel:
         self.discriminator_y = create_discriminator(input_shape)
     
     def initialize_loss_functions(self):
-        loss_obj = tf.keras.losses.mean_squared_error(from_logits=True)
+        loss_obj = tf.keras.losses.mean_squared_error
 
         def discriminator_loss(real, generated): # adversarial loss for discriminator
             real_loss = loss_obj(tf.ones_like(real), real)
@@ -178,19 +185,14 @@ class CycleGANModel:
             ckpt.restore(self.ckpt_manager.latest_checkpoint)
             print ('Latest checkpoint restored!!')
 
-    # generator history bins stabilize oscillations in training
-    g_history = []
-    f_history = []
+
+
+
 
     @tf.function
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
-        # once to calculate the gradients.
-
-        if len(g_history) == hp.generator_history_size:
-            g_history.pop(-1)
-        if len(f_history) == hp.generator_history_size:
-            f_history.pop(-1)
+        # once to calculate the gradients
 
         with tf.GradientTape(persistent=True) as tape: # Record operations for automatic differentiation.
             # Generator G translates X -> Y
@@ -199,15 +201,23 @@ class CycleGANModel:
 
             # 1. Get the predictions.
             fake_y = self.generator_g(real_x, training=True)
-            g_history.append(fake_y)
             cycled_x = self.generator_f(fake_y, training=True)
 
             fake_x = self.generator_f(real_y, training=True)
-            f_history.append(fake_x)
             cycled_y = self.generator_g(fake_x, training=True)
 
+            # Update queue
+            if self.generator_queue.size() >= hp.generator_history_size * hp.batch_size:
+                self.generator_queue.dequeue_many(10)
+            self.generator_queue.enqueue_many((fake_x, fake_y))
 
-
+            # Dequeue to extract sample and return to queue for storage
+            size = self.generator_queue.size()
+            batch_extract = tf.random.shuffle(tf.range(size))[:hp.batch_size]
+            history_tensor = tf.stack(self.generator_queue.dequeue_many(size))
+            f_sample = tf.gather(history_tensor[0], batch_extract)
+            g_sample = tf.gather(history_tensor[1], batch_extract)
+            self.generator_queue.enqueue_many(tf.unstack(history_tensor, num = 2))
 
             # same_x and same_y are used for identity loss.
             same_x = self.generator_f(real_x, training=True)
@@ -217,8 +227,8 @@ class CycleGANModel:
             disc_real_y = self.discriminator_y(real_y, training=True)
 
             # For discriminator loss
-            disc_fake_x_rand = self.discriminator_x(random.choice(f_history), training=True)
-            disc_fake_y_rand = self.discriminator_y(random.choice(g_history), training=True)
+            disc_fake_x_rand = self.discriminator_x(f_sample, training=True)
+            disc_fake_y_rand = self.discriminator_y(g_sample, training=True)
 
             # For generator loss
             disc_fake_x = self.discriminator_x(fake_x, training=True)
@@ -262,6 +272,7 @@ class CycleGANModel:
         
         self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
                                                         self.discriminator_y.trainable_variables))
+    
 
     def generate_images(self, model, test_input):
         prediction = model(test_input)
@@ -299,7 +310,7 @@ class CycleGANModel:
                 if n % 1 == 0:
                     print ('.', end='')
                 if n % 20 == 0:
-                    print("20 images processed in %d time" % (time.time() - set_of_20_start_time))
+                    print("20 images processed in %d seconds" % (time.time() - set_of_20_start_time))
                     set_of_20_start_time = time.time()
                 if n >= hp.max_images_per_epoch:
                     break
