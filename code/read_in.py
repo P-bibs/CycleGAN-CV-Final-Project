@@ -16,8 +16,8 @@ class Datasets():
         self.test_A_path = os.path.join(dat_dir, 'testA')
         self.test_B_path = os.path.join(dat_dir, 'testB')
 
-        self.train_A = self.push_data(self.train_A_path)
-        self.train_B = self.push_data(self.train_B_path)
+        self.train_A = self.push_data(self.train_A_path, Name = "Dataset A")
+        self.train_B = self.push_data(self.train_B_path, Name = "Dataset B")
         self.test_A = self.push_data(self.test_A_path, False)
         self.test_B = self.push_data(self.test_B_path, False)
 
@@ -49,10 +49,10 @@ class Datasets():
         augmented = np.stack(augmented, axis = 0)
         return normalize(augmented)    
   
-    def push_data(self, path, train = True):
+    def push_data(self, path, Name = None,  train = True):
         # returns a generator for the specified data
         data_generator = custom_data_generator(path, (hp.img_size, hp.img_size), 
-            self.preprocess, hp.batch_size, True, 1.5)
+            self.preprocess, hp.batch_size, True, 1.5, Name = Name)
             # threshold of 1.5 should limit augmentation time to 15 min per epoch
         datagen = data_generator.datagen()
         return datagen
@@ -60,7 +60,7 @@ class Datasets():
 class custom_data_generator():
     # Note: As configured, this generator passes over incomplete batches. This may be problematic for larger batch sizes
 
-    def __init__(self, path, img_size, preprocess_function, batch_size, augment, aug_threshold):
+    def __init__(self, path, img_size, preprocess_function, batch_size, augment, aug_threshold, Name = None):
         self.img_size = img_size
         self.path = path
         self.files = os.listdir(path)
@@ -71,6 +71,8 @@ class custom_data_generator():
         self.aug_threshold = aug_threshold
         self.aug_time = 0
         self.sample_size = 5
+        self.is_named = (Name != None)
+        self.name = Name
 
     def get_batch(self, idx):
 
@@ -105,12 +107,19 @@ class custom_data_generator():
                 p = 1
                 self.augment = True
                 self.aug_threshold = None
-            print("Average augmentation time per image is "+str(avg_time)+ " seconds. \n")
             per = (p*100)
-            print("Augmention now set to run for " + str(per) + " percent of batches. \n")
+            if self.is_named:
+                print("\n"+self.name+": Average augmentation time per image is "+str(round(avg_time, 3))+ " seconds.")
+                print("\n"+self.name+": Augmention now set to run for " + str(round(per, 3)) + " percent of batches.")
+            else:
+                print("\n"+"Average augmentation time per image is "+str(round(avg_time, 3))+ " seconds.")
+                print("\n"+"Augmention now set to run for " + str(round(per, 3)) + " percent of batches.")
         elif idx == 2* self.sample_size:
             avg_time = self.aug_time / float(self.sample_size * self.batch_size)
-            print("Average augmentation time is now", avg_time, "seconds per image. \n")
+            if self.is_named:
+                print("\n"+self.name+": Average augmentation time is now", round(avg_time, 3), "seconds per image.")
+            else:
+                print("\n"+"Average augmentation time is now", round(avg_time, 3), "seconds per image.")
         elif idx > self.sample_size:
             self.augment = (random.random() < p)
 
