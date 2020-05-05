@@ -292,6 +292,45 @@ class CycleGANModel:
             print ('Time taken for epoch {} is {} sec\n'.format(epoch + 1,
                                                                 time.time()-start))
 
-    def test(self, data_generator):
+    def test(self, data_generator_x, data_generator_y):
         # TODO: add model evaluation
-        raise Error("Model evaluation not yet implemented")
+        # raise Error("Model evaluation not yet implemented")
+        print("Evaluating Model")
+        plt.figure()
+        images = next(data_generator_x);
+        translated_images = self.generator_g(images)
+        cycled_images = self.generator_f(translated_images)
+        
+        for i in range(5):
+            img = images[i]
+            translated_img = translated_images[i]
+            cycled_img = cycled_images[i]
+
+            plt.subplot(5,3,3*i+1)
+            plt.imshow(img)
+            plt.subplot(5,3,3*i + 2)
+            plt.imshow(translated_img)
+            plt.subplot(5,3,3*i + 3)
+            plt.imshow(cycled_img)
+        
+        plt.show()
+
+        plt.figure()
+        images = next(data_generator_y);
+        translated_images = self.generator_f(images)
+        cycled_images = self.generator_g(translated_images)
+        
+        for i in range(5):
+            img = images[i]
+            translated_img = translated_images[i]
+            cycled_img = cycled_images[i]
+
+            plt.subplot(5,3,3*i+1)
+            plt.imshow(img)
+            plt.subplot(5,3,3*i + 2)
+            plt.imshow(translated_img)
+            plt.subplot(5,3,3*i + 3)
+            plt.imshow(cycled_img)
+        
+        plt.show()
+                
