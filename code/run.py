@@ -52,44 +52,6 @@ def parse_args():
 
     return parser.parse_args()
 
-# def train(model, datasets, checkpoint_path):
-#     """ Training routine. """
-
-#     # Keras callbacks for training
-#     callback_list = [
-#         tf.keras.callbacks.ModelCheckpoint(
-#             filepath=checkpoint_path + \
-#                     "weights.e{epoch:02d}.h5",
-#             save_best_only=True,
-#             save_weights_only=False),
-#         tf.keras.callbacks.TensorBoard(
-#             update_freq='batch',
-#             profile_batch=0),
-#         ImageLabelingLogger(datasets)
-#     ]
-
-#     # Include confusion logger in callbacks if flag set
-#     if ARGS.confusion:
-#         callback_list.append(ConfusionMatrixLogger(datasets))
-
-#     # Begin training
-#     model.fit(
-#         x=datasets.train_data,
-#         validation_data=datasets.test_data,
-#         epochs=hp.num_epochs,
-#         batch_size=None,
-#         callbacks=callback_list,
-#     )
-
-# def test(model, test_data):
-#     """ Testing routine. """
-
-#     # Run model on test set
-#     model.evaluate(
-#         x=test_data,
-#         verbose=1,
-#     )
-
 
 def main():
     """ Main function. """
