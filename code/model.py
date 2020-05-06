@@ -14,6 +14,9 @@ from tensorflow.keras.preprocessing.image import img_to_array
 # from keras.preprocessing.image import load_img
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
+import skimage
+import glob
+import os
 
 # Combination of:
 # https://stackoverflow.com/questions/50677544/reflection-padding-conv2d
@@ -253,20 +256,23 @@ class CycleGANModel:
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
         # once to calculate the gradients.
+        output = []
         with tf.GradientTape(persistent=True) as tape: # Record operations for automatic differentiation.
             # Generator G translates X -> Y
             # Generator F translates Y -> X.
             
             # 1. Get the predictions.
-            fake_y = self.generator_g(real_x, training=True)
+            fake_y = self.generator_g(real_x, training=True) #(1, 128, 128, 3)
             cycled_x = self.generator_f(fake_y, training=True)
-
+            
             fake_x = self.generator_f(real_y, training=True)
             cycled_y = self.generator_g(fake_x, training=True)
 
             # same_x and same_y are used for identity loss.
             same_x = self.generator_f(real_x, training=True)
             same_y = self.generator_g(real_y, training=True)
+
+            output = [fake_y, cycled_x, fake_x, cycled_y, same_x, same_y]
 
             disc_real_x = self.discriminator_x(real_x, training=True)
             disc_real_y = self.discriminator_y(real_y, training=True)
@@ -313,6 +319,8 @@ class CycleGANModel:
         self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
                                                         self.discriminator_y.trainable_variables))
 
+        return output
+
     def generate_images(self, model, test_input, epoch, n):
         prediction = model(test_input)
             
@@ -329,9 +337,32 @@ class CycleGANModel:
             plt.imshow(display_list[i] * 0.5 + 0.5)
             plt.axis('off')
         plt.show()
+        # plt.savefig('test')
 
+    def save_images(self, images, dataset, epoch, n_image):
+        # tensorflow.python.framework.ops.EagerTensor
+        for i in range(8):
+            images[i] = np.squeeze(images[i]* 0.5 + 0.5, axis=0) # (128, 128, 3)
+        # Delete the old thumbnails, if there are any
+        files = glob.glob('results/' + dataset + '/*.jpg')
+        for f in files:
+            os.remove(f)
+        if not os.path.isdir('results'):
+            print('Making results directory.')
+            os.mkdir('results')
+        if not os.path.isdir('results/' + dataset):
+            print('Making ' + dataset + ' directory.')
+            os.mkdir('results/' + dataset)
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'real_x.jpg', tf.image.encode_png((images[0]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'real_y.jpg', tf.image.encode_png((images[1]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'fake_y.jpg', tf.image.encode_png((images[2]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'cycled_x.jpg', tf.image.encode_png((images[3]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'fake_x.jpg', tf.image.encode_png((images[4]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'cycled_y.jpg', tf.image.encode_png((images[5]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'same_x.jpg', tf.image.encode_png((images[6]*255).astype(np.uint8)))
+        tf.io.write_file('results/' + dataset + '/' + epoch + '_' + n_image + '_' + 'same_y.jpg', tf.image.encode_png((images[7]*255).astype(np.uint8)))       
 
-    def train(self, train_x, train_y):
+    def train(self, train_x, train_y, dataset):
         # raise Exception("Model training not yet implemented")
         print("Beginning training")
 
@@ -344,12 +375,14 @@ class CycleGANModel:
                 for i in range(hp.batch_size):
                     image_x = np.expand_dims(batch_image_x[i], axis=0)
                     image_y = np.expand_dims(batch_image_y[i], axis=0)
-                    self.train_step(image_x, image_y) # ignoring batch size/update for every image
+                    images = [image_x, image_y]
+                    images =  images + self.train_step(image_x, image_y) # ignoring batch size/update for every image
+
                     if n_image % 10 == 0:
                         # print ('.', end='')
-                        print("Sample image at epoch", epoch, "image", n_image)
-                        sample_image = image_x
-                        self.generate_images(self.generator_g, sample_image, epoch, n_image)
+                        print("Sample image at epoch", epoch + 1, "image", n_image + 1)
+                        # self.generate_images(self.generator_g, image_x, epoch + 1, n_image + 1)
+                        self.save_images(images, dataset, str(epoch + 1), str(n_image + 1))
                     if n_image >= hp.max_images_per_epoch:
                         break
                     n_image+=1

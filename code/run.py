@@ -91,7 +91,6 @@ def main():
     """ Main function. """
     if ARGS.dataset == "horse-zebra":
         data_dir = "../data/horse2zebra"
-        # data_dir = "/Users/annawei/2019-2020/cs1430/CycleGAN-CV-Final-Project/data/horse2zebra/"
     elif ARGS.dataset == "day-night":
         # TODO: get day to night data
         raise Exception("Day-night data not yet gathered")
@@ -109,7 +108,7 @@ def main():
        raise Exception("test function in model.py not yet written")
         # cycleGAN_model.test(datasets.test_A)
     else:
-        cycleGAN_model.train(datasets.train_A, datasets.train_B)
+        cycleGAN_model.train(datasets.train_A, datasets.train_B, ARGS.dataset)
 
 
 # Make arguments global
