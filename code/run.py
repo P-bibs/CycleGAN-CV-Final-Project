@@ -90,8 +90,8 @@ def test(model, test_data):
 def main():
     """ Main function. """
     if ARGS.dataset == "horse-zebra":
-        # data_dir = "../data/horse2zebra"
-        data_dir = "/Users/annawei/2019-2020/cs1430/CycleGAN-CV-Final-Project/data/horse2zebra/"
+        data_dir = "../data/horse2zebra"
+        # data_dir = "/Users/annawei/2019-2020/cs1430/CycleGAN-CV-Final-Project/data/horse2zebra/"
     elif ARGS.dataset == "day-night":
         # TODO: get day to night data
         raise Exception("Day-night data not yet gathered")
