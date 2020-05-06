@@ -259,8 +259,6 @@ class CycleGANModel:
             
             # 1. Get the predictions.
             fake_y = self.generator_g(real_x, training=True)
-            print("real_x.shape", real_x.shape)
-            print("fake_y.shape", fake_y.shape)
             cycled_x = self.generator_f(fake_y, training=True)
 
             fake_x = self.generator_f(real_y, training=True)
