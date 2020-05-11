@@ -15,8 +15,8 @@ class Datasets():
         self.test_A_path = os.path.join(dat_dir, 'testA')
         self.test_B_path = os.path.join(dat_dir, 'testB')
 
-        self.train_A = self.push_data(self.train_A_path, Name = "Dataset A")
-        self.train_B = self.push_data(self.train_B_path, Name = "Dataset B")
+        self.train_A = self.push_data(self.train_A_path, Name = "Dataset A", train=False)
+        self.train_B = self.push_data(self.train_B_path, Name = "Dataset B", train=False)
         self.test_A = self.push_data(self.test_A_path, False)
         self.test_B = self.push_data(self.test_B_path, False)
 

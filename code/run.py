@@ -68,7 +68,7 @@ def main():
     elif ARGS.dataset == "horse-giraffe":
         data_dir = "../data/horse2giraffe"
 
-    datasets = Datasets(data_dir, ARGS.augment)
+    datasets = Datasets(data_dir)
 
     cycleGAN_model = CycleGANModel()
 
