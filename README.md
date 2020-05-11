@@ -18,3 +18,8 @@ Sample VS Code debug file:
     ]
 }
 ```
+## Data
+Data can be found in the data directory and downloaded with the `get_data.sh` script.
+
+## Checkpoints
+Pre-trained checkpoints can be found in [this google drive](https://drive.google.com/drive/folders/1fM165n4-7gPV_xVI_vxJ8Kajiym0XFK5?usp=sharing)
