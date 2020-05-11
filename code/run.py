@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument(
         '--dataset',
         required=True,
-        choices=['horse-zebra', 'day-night', 'apples-oranges', 'summer-winter'],
+        choices=['horse-zebra', 'day-night', 'apples-oranges', 'summer-winter', 'horse-giraffe'],
         help='''Which dataset to run''')
     parser.add_argument(
         '--data',
@@ -44,46 +44,13 @@ def parse_args():
         help='''Skips training and evaluates on the test set once.
         You can use this to test an already trained model by loading
         its checkpoint.''')
+    parser.add_argument(
+        '--augment',
+        action='store_true',
+        help='''Augments image data''')
+
 
     return parser.parse_args()
-
-def train(model, datasets, checkpoint_path):
-    """ Training routine. """
-
-    # Keras callbacks for training
-    callback_list = [
-        tf.keras.callbacks.ModelCheckpoint(
-            filepath=checkpoint_path + \
-                    "weights.e{epoch:02d}.h5",
-            save_best_only=True,
-            save_weights_only=False),
-        tf.keras.callbacks.TensorBoard(
-            update_freq='batch',
-            profile_batch=0),
-        ImageLabelingLogger(datasets)
-    ]
-
-    # Include confusion logger in callbacks if flag set
-    if ARGS.confusion:
-        callback_list.append(ConfusionMatrixLogger(datasets))
-
-    # Begin training
-    model.fit(
-        x=datasets.train_data,
-        validation_data=datasets.test_data,
-        epochs=hp.num_epochs,
-        batch_size=None,
-        callbacks=callback_list,
-    )
-
-def test(model, test_data):
-    """ Testing routine. """
-
-    # Run model on test set
-    model.evaluate(
-        x=test_data,
-        verbose=1,
-    )
 
 
 def main():
@@ -98,15 +65,17 @@ def main():
         data_dir = "../data/apple2orange"
     elif ARGS.dataset == "summer-winter":
         data_dir = "../data/summer2winter_yosemite"
+    elif ARGS.dataset == "horse-giraffe":
+        data_dir = "../data/horse2giraffe"
 
     datasets = Datasets(data_dir)
 
     cycleGAN_model = CycleGANModel()
 
     if ARGS.evaluate:
-        cycleGAN_model.test(datasets.test_A)
+        cycleGAN_model.test(datasets.train_A, datasets.train_B)
     else:
-        cycleGAN_model.train(datasets.train_A)
+        cycleGAN_model.train(datasets.train_A, datasets.train_B)
 
 
 # Make arguments global
